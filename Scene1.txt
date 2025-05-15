@@ -1,0 +1,4 @@
+Object Sphere ( (0.0, -1000.0, 0.0), 1000.0 ) Diffuse ( (0.5, 0.5, 0.5) )
+Object Sphere ( (4.0, 1.0, 0.0), 1.0 ) Metallic ( (0.7, 0.6, 0.5), 0.0 )
+Object Sphere ( (-4.0, 1.0, 0.0), 1.0 ) Diffuse ( (0.4, 0.2, 0.1) )
+Object Sphere ( (0.0, 1.0, 0.0), 1.0 ) Crystalline ( 1.5 )
