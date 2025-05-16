@@ -267,9 +267,19 @@ int main(int argc, char** argv) {
 
 	MPI_Gather(data, size, MPI_CHAR, full_data, size, MPI_CHAR, root, MPI_COMM_WORLD);
 
-	double total_elapsed=0;
+	double max_t, min_t, sum_t;
 
-	MPI_Reduce(&elapsed, &total_elapsed, 1, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
+	MPI_Reduce(&elapsed, &min_t, 1, MPI_DOUBLE, MPI_MIN, root, MPI_COMM_WORLD);
+	MPI_Reduce(&elapsed, &max_t, 1, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
+	MPI_Reduce(&elapsed, &sum_t, 1, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
+
+	if (pid == root) {
+		double avg_t = sum_t / np;
+		std::cout << "Render Time => Min: " << min_t << ", Max: " << max_t << ", Avg: " << avg_t << std::endl;
+
+		writeBMP("imgCPU_MPI.bmp", full_data, patch_x_size, patch_y_size * np);
+		printf("Imagen creada.\n");
+	}
 
 #ifdef LOG
 	std::cout << "[" << pid << "] patch_x_size = " << patch_x_size << std::endl;
@@ -281,12 +291,6 @@ int main(int argc, char** argv) {
 	std::cout << "[" << pid << "] patch_y_end = " << patch_y_end << std::endl;
 	std::cout << "[" << pid << "] Elapsed Time = " << elapsed.count() << std::endl;
 #endif
-
-	if (pid == root) {
-		writeBMP("imgCPU_MPI.bmp", full_data, patch_x_size, patch_y_size * np);
-		printf("Imagen creada.\n");
-		printf("Render Time with %d processes: %lf\n", np, total_elapsed);
-	}
 
 	free(full_data);
 	free(data);
