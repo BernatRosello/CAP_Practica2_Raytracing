@@ -12,18 +12,17 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "${INCLUDE_DIR}/*.hpp"
 )
 
-if (SOURCES EQUAL "")
-    # Define the target (can be changed to add_library if needed)
-    add_executable(${PROGRAM_NAME} ${SOURCES})
 
-    # Specify include directories
-    target_include_directories(${PROGRAM_NAME} PRIVATE ${INCLUDE_DIR})
+# Define the target (can be changed to add_library if needed)
+add_executable(${PROGRAM_NAME} ${SOURCES})
 
-    # Optional: Link common libraries if needed
-    target_link_libraries(${PROGRAM_NAME} PRIVATE MPI::MPI_CXX)
+# Specify include directories
+target_include_directories(${PROGRAM_NAME} PRIVATE ${INCLUDE_DIR})
 
-    # Set output directory to your /out folder
-    set_target_properties(${PROGRAM_NAME} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out/${PROGRAM_NAME}"
+# Optional: Link common libraries if needed
+target_link_libraries(${PROGRAM_NAME} PRIVATE MPI::MPI_CXX)
+
+# Set output directory to your /out folder
+set_target_properties(${PROGRAM_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out/${PROGRAM_NAME}"
 )
-endif()

@@ -28,6 +28,12 @@
 #include "random.h"
 #include "utils.h"
 #include <chrono>
+#include <mpi.h>
+
+//#define LOG 0
+#define ROW 1
+#define COL 2
+#define RECT 3
 
 Scene loadObjectsFromFile(const std::string& filename) {
 	std::ifstream file(filename);
@@ -190,9 +196,6 @@ void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, in
 
 	Camera cam(lookfrom, lookat, Vec3(0, 1, 0), 20, float(w) / float(h), aperture, dist_to_focus);
 	
-	std::chrono::duration<double> elapsed;
-	auto start = std::chrono::high_resolution_clock::now();
-
 	for (int j = 0; j < (ph - py); j++) {
 		for (int i = 0; i < (pw - px); i++) {
 
@@ -211,39 +214,83 @@ void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, in
 			img[(j * patch_w + i) * 3 + 0] = char(255.99 * col[2]);
 		}
 	}
-
-	auto end = std::chrono::high_resolution_clock::now();
-	elapsed = (end - start);
-
-	std::cout << "Render Time CPU: " << elapsed.count() << std::endl;
 }
 
-int main() {
+int main(int argc, char** argv) {
 	//srand(time(0));
+	int pid, np;
+	const int root = 0;
+	const bool prl_row = true;
+	const bool prl_col = false;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+	MPI_Comm_size(MPI_COMM_WORLD, &np);
 
 	int w = 256;// 1200;
 	int h = 256;// 800;
 	int ns = 10;
 
-	int patch_x_size = w;
-	int patch_y_size = h;
-	int patch_x_idx = 1;
-	int patch_y_idx = 1;
+	int patch_x_size, patch_y_size, patch_x_idx, patch_y_idx;
+
+#ifdef ROW
+	if (pid == root) std::cout << "Render process by rows." << std::endl;
+	patch_x_size = w;
+	patch_x_idx = 0;
+	patch_y_size = h / np;
+	patch_y_idx = pid;
+#elif COL
+	if (pid == root) std::cout << "Render process by columns." << std::endl;
+	patch_x_size = w / np;
+	patch_x_idx = pid;
+	patch_y_size = h;
+	patch_y_idx = 0;
+#endif
 
 	int size = sizeof(unsigned char) * patch_x_size * patch_y_size * 3;
 	unsigned char* data = (unsigned char*)calloc(size, 1);
 
-	int patch_x_start = (patch_x_idx - 1) * patch_x_size;
-	int patch_x_end = patch_x_idx * patch_x_size;
-	int patch_y_start = (patch_y_idx - 1) * patch_y_size;
-	int patch_y_end = patch_y_idx * patch_y_size;
+	int patch_x_start = patch_x_idx * patch_x_size;
+	int patch_x_end = (patch_x_idx+1) * patch_x_size;
+	int patch_y_start = patch_y_idx * patch_y_size;
+	int patch_y_end = (patch_y_idx + 1) * patch_y_size;
+
+	std::chrono::duration<double> elapsed;
+	auto start = std::chrono::high_resolution_clock::now();
 
 	rayTracingCPU(data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
+	
+	auto end = std::chrono::high_resolution_clock::now();
+	elapsed = (end - start);
 
-	writeBMP("imgCPUImg1.bmp", data, patch_x_size, patch_y_size);
-	printf("Imagen creada.\n");
+	int full_size = size * np;
+	unsigned char* full_data = (unsigned char*)calloc(full_size, 1);
 
+	MPI_Gather(data, size, MPI_CHAR, full_data, size, MPI_CHAR, root, MPI_COMM_WORLD);
+
+	double total_elapsed=0;
+
+	MPI_Reduce(&elapsed, &total_elapsed, 1, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
+
+#ifdef LOG
+	std::cout << "[" << pid << "] patch_x_size = " << patch_x_size << std::endl;
+	std::cout << "[" << pid << "] patch_y_size = " << patch_y_size << std::endl;
+	std::cout << "[" << pid << "] size = " << size << std::endl;
+	std::cout << "[" << pid << "] patch_x_start = " << patch_x_start << std::endl;
+	std::cout << "[" << pid << "] patch_x_end = " << patch_x_end << std::endl;
+	std::cout << "[" << pid << "] patch_y_start = " << patch_y_start << std::endl;
+	std::cout << "[" << pid << "] patch_y_end = " << patch_y_end << std::endl;
+	std::cout << "[" << pid << "] Elapsed Time = " << elapsed.count() << std::endl;
+#endif
+
+	if (pid == root) {
+		writeBMP("imgCPU_MPI.bmp", full_data, patch_x_size, patch_y_size * np);
+		printf("Imagen creada.\n");
+		printf("Render Time with %d processes: %lf\n", np, total_elapsed);
+	}
+
+	free(full_data);
 	free(data);
-	getchar();
+	//getchar();
+	MPI_Finalize();
 	return (0);
 }

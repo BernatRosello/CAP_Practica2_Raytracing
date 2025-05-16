@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION "3.20")
 # En caso de que no haga falta alguno de los lenguajes listados,
 # se puede deshabilitar simplemente eliminándolo de la lista
 # https://cmake.org/cmake/help/latest/command/project.html
-project(plantilla_cap LANGUAGES "CXX" "CUDA")
+project(practica_raytracing LANGUAGES "CXX" "CUDA")
 
 #################################################
 # Opciones relacionadas con el soporte de CUDA
