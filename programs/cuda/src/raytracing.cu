@@ -17,11 +17,6 @@
 
 #include "random.h"
 // #include "utils.h"
-#include "MaterialData.h"
-#include "device_launch_parameters.h"
-#include <string>
-#include <fstream>
-#include <sstream>
 
 // limited version of checkCudaErrors from helper_cuda.h in CUDA examples
 #define checkCudaErrors(val) check_cuda((val), #val, __FILE__, __LINE__)
@@ -155,176 +150,7 @@ __global__ void create_world(Object **aux, int numobjects, SceneGPU *d_world, Ca
     }
 }
 
-// Kernel to build scene objects from SphereData
-__global__ void build_scene_from_data(SphereData* data, int numobjects, SceneGPU* d_world, Object** d_objects)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (idx >= numobjects) return;
-
-    SphereData s = data[idx];
-    Vec3 center(s.center[0], s.center[1], s.center[2]);
-    float radius = s.radius;
-    MaterialData m = s.material;
-
-    Material* mat = nullptr;
-    switch (m.type) {
-    case DIFFUSE:
-        mat = new Diffuse(Vec3(m.color[0], m.color[1], m.color[2]));
-        break;
-    case METALLIC:
-        mat = new Metallic(Vec3(m.color[0], m.color[1], m.color[2]), m.mat_property);
-        break;
-    case CRYSTALLINE:
-        mat = new Crystalline(m.mat_property);
-        break;
-    default:
-        mat = new Diffuse(Vec3(0.5f, 0.5f, 0.5f)); // fallback
-    }
-
-    d_objects[idx] = new Object(new Sphere(center, radius), mat);
-}
-
-// Kernel to create camera (run once)
-__global__ void create_camera(Camera** d_camera, int nx, int ny)
-{
-    if (threadIdx.x == 0 && blockIdx.x == 0)
-    {
-        Vec3 lookfrom(13.0f, 2.0f, 3.0f);
-        Vec3 lookat(0.0f, 0.0f, 0.0f);
-        float dist_to_focus = 10.0f; //(lookfrom - lookat).length();
-        float aperture = 0.1f;
-        *d_camera = new Camera(lookfrom, lookat, Vec3(0.0f, 1.0f, 0.0f), 20.0f, float(nx) / float(ny), aperture, dist_to_focus);
-    }
-}
-
-void loadSceneToGPUFromFile(const std::string& filename, SceneGPU* d_world, Object*** d_object_list_ptr, int* num_objects_out, Camera** d_camera, int nx, int ny, curandState* rand_state)
-{
-    std::ifstream file(filename);
-    std::string line;
-    std::vector<SphereData> sphereDataList;
-
-    if (!file.is_open()) {
-        std::cerr << "Failed to open scene file: " << filename << std::endl;
-        exit(1);
-    }
-
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string token;
-        std::vector<std::string> tokens;
-        while (ss >> token) tokens.push_back(token);
-        if (tokens.empty()) continue;
-
-        if (tokens[0] == "Object" && tokens[1] == "Sphere") {
-            // Example line format:
-            // Object Sphere ( x y z r ) MaterialType params...
-            try {
-                // Expect tokens like: Object Sphere ( 1.0 2.0 3.0 0.5 ) Diffuse 0.7 0.6 0.5
-                // Find positions of '(' and ')'
-                size_t openParenPos = line.find('(');
-                size_t closeParenPos = line.find(')');
-                if (openParenPos == std::string::npos || closeParenPos == std::string::npos) {
-                    std::cerr << "Malformed sphere line: " << line << std::endl;
-                    continue;
-                }
-                std::string coords_str = line.substr(openParenPos + 1, closeParenPos - openParenPos - 1);
-                std::stringstream coords_ss(coords_str);
-                float sx, sy, sz, sr;
-                coords_ss >> sx >> sy >> sz >> sr;
-
-                SphereData sphere;
-                sphere.center[0] = sx;
-                sphere.center[1] = sy;
-                sphere.center[2] = sz;
-                sphere.radius = sr;
-
-                std::string matType;
-                std::stringstream mat_ss(line.substr(closeParenPos + 1));
-                mat_ss >> matType;
-
-                if (matType == "Crystalline") {
-                    sphere.material.type = CRYSTALLINE;
-                    sphere.material.color[0] = 0.0f;
-                    sphere.material.color[1] = 0.0f;
-                    sphere.material.color[2] = 0.0f;
-                    float refr_idx;
-                    mat_ss >> refr_idx;
-                    sphere.material.mat_property = refr_idx;
-                }
-                else if (matType == "Metallic") {
-                    sphere.material.type = METALLIC;
-                    float r, g, b, fuzz;
-                    mat_ss >> r >> g >> b >> fuzz;
-                    sphere.material.color[0] = r;
-                    sphere.material.color[1] = g;
-                    sphere.material.color[2] = b;
-                    sphere.material.mat_property = fuzz;
-                }
-                else if (matType == "Diffuse") {
-                    sphere.material.type = DIFFUSE;
-                    float r, g, b;
-                    mat_ss >> r >> g >> b;
-                    sphere.material.color[0] = r;
-                    sphere.material.color[1] = g;
-                    sphere.material.color[2] = b;
-                    sphere.material.mat_property = 0.0f;
-                }
-                else {
-                    std::cerr << "Unknown material: " << matType << " in line: " << line << std::endl;
-                    continue;
-                }
-
-                sphereDataList.push_back(sphere);
-            }
-            catch (...) {
-                std::cerr << "Parsing error in line: " << line << std::endl;
-                continue;
-            }
-        }
-    }
-
-    file.close();
-
-    int numObjects = static_cast<int>(sphereDataList.size());
-    *num_objects_out = numObjects;
-
-    // 1. Allocate device memory for SphereData[]
-    SphereData* d_sphere_data = nullptr;
-    checkCudaErrors(cudaMalloc(&d_sphere_data, sizeof(SphereData) * numObjects));
-    checkCudaErrors(cudaMemcpy(d_sphere_data, sphereDataList.data(), sizeof(SphereData) * numObjects, cudaMemcpyHostToDevice));
-
-    // 2. Allocate device memory for Object* array
-    Object** d_objects = nullptr;
-    checkCudaErrors(cudaMalloc(&d_objects, sizeof(Object*) * numObjects));
-    *d_object_list_ptr = d_objects;
-
-    // 3. Initialize SceneGPU on host, then copy to device
-    SceneGPU h_scene;
-    h_scene.ol = d_objects;       // device pointer to objects
-    h_scene.capacity = numObjects;
-    h_scene.size = numObjects;
-    h_scene.sky = Vec3(0.5f, 0.7f, 1.0f);
-    h_scene.inf = Vec3(1.0f, 1.0f, 1.0f);
-
-    checkCudaErrors(cudaMemcpy(d_world, &h_scene, sizeof(SceneGPU), cudaMemcpyHostToDevice));
-
-    // 4. Launch kernel to build the objects in parallel
-    int threads = 256;
-    int blocks = (numObjects + threads - 1) / threads;
-    build_scene_from_data << <blocks, threads >> > (d_sphere_data, numObjects, d_world, d_objects);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    // 5. Create camera (once)
-    create_camera << <1, 1 >> > (d_camera, nx, ny);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    // 6. Free temporary SphereData array
-    checkCudaErrors(cudaFree(d_sphere_data));
-}
-
-void rayTracingGPU(Vec3* img, int w, int h, int ns = 1)
+void rayTracingGPU(Vec3 *img, int w, int h, int ns = 1)
 {
     int tx = 8;
     int ty = 8;
@@ -332,63 +158,78 @@ void rayTracingGPU(Vec3* img, int w, int h, int ns = 1)
     double timer_seconds;
 
     std::cerr << "Rendering a " << w << "x" << h << " image with " << ns << " samples per pixel ";
-    std::cerr << "in " << tx << "x" << ty << " blocks.\
+    std::cerr << "in " << tx << "x" << ty << " blocks.\n";
 
+    int num_pixels = w * h;
+    size_t fb_size = num_pixels * sizeof(Vec3);
 
+    start = clock();
+    // allocate FB
+    Vec3 *fb;
+    checkCudaErrors(cudaMallocManaged((void **)&fb, fb_size));
 
+    // allocate random state
+    curandState *d_rand_state;
+    checkCudaErrors(cudaMalloc((void **)&d_rand_state, num_pixels * sizeof(curandState)));
+    curandState *d_rand_state2;
+    checkCudaErrors(cudaMalloc((void **)&d_rand_state2, 1 * sizeof(curandState)));
 
-
-
-        ChatGPT said :
-    n";
-
-        arduino
-        Copy
-        Edit
-        int num_pixels = w * h;
-    Vec3* fb;
-    checkCudaErrors(cudaMallocManaged(&fb, num_pixels * sizeof(Vec3)));
-
-    Camera* d_camera = nullptr;
-    SceneGPU* d_world = nullptr;
-    checkCudaErrors(cudaMallocManaged(&d_world, sizeof(SceneGPU)));
-
-    Object** d_objects = nullptr;
-    int numObjects = 0;
-
-    curandState* d_rand_state;
-    checkCudaErrors(cudaMalloc(&d_rand_state, num_pixels * sizeof(curandState)));
-
-    // Initialize random states
-    dim3 blocks_init((w + tx - 1) / tx, (h + ty - 1) / ty);
-    dim3 threads_init(tx, ty);
-    render_init << <blocks_init, threads_init >> > (w, h, d_rand_state);
+    // we need that 2nd random state to be initialized for the world creation
+    rand_init<<<1, 1>>>(d_rand_state2);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-    // Load scene and setup objects and camera
-    loadSceneToGPUFromFile("Scene.txt", d_world, &d_objects, &numObjects, &d_camera, w, h, d_rand_state);
-
-    // Launch rendering kernel
-    dim3 blocks((w + tx - 1) / tx, (h + ty - 1) / ty);
-    dim3 threads(tx, ty);
-
-    start = clock();
-    render << <blocks, threads >> > (fb, w, h, ns, &d_camera, d_world, d_rand_state);
+    // make our world of hitables & the camera
+    Object **aux;
+    int numobjects = 22 * 22 + 1 + 3;
+    checkCudaErrors(cudaMalloc((void **)&aux, numobjects * sizeof(Object *)));
+    SceneGPU *d_world;
+    checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(Scene)));
+    Camera **d_camera;
+    checkCudaErrors(cudaMalloc((void **)&d_camera, sizeof(Camera *)));
+    create_world<<<1, 1>>>(aux, numobjects, d_world, d_camera, w, h, d_rand_state2);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
     stop = clock();
     timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
+    std::cerr << "Loading took " << timer_seconds << " seconds.\n";
 
+    start = clock();
+    // Render our buffer
+    dim3 blocks(w / tx + 1, h / ty + 1);
+    dim3 threads(tx, ty);
+    render_init<<<blocks, threads>>>(w, h, d_rand_state);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    render<<<blocks, threads>>>(fb, w, h, ns, d_camera, d_world, d_rand_state);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+    stop = clock();
+    timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
     std::cerr << "Rendering took " << timer_seconds << " seconds.\n";
 
-    // Copy framebuffer to host memory (img)
-    cudaMemcpy(img, fb, num_pixels * sizeof(Vec3), cudaMemcpyDeviceToHost);
+    // Output FB as Image
+    start = clock();
+    for (int i = h - 1; i >= 0; i--)
+    {
+        for (int j = 0; j < w; j++)
+        {
+            size_t pixel_index = i * w + j;
+            img[pixel_index] = fb[pixel_index];
+        }
+    }
+    stop = clock();
+    timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
+    std::cerr << "Copy took " << timer_seconds << " seconds.\n";
 
-    // Cleanup
-    checkCudaErrors(cudaFree(fb));
+    // clean up
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaFree(d_camera));
     checkCudaErrors(cudaFree(d_world));
-    checkCudaErrors(cudaFree(d_objects)); // Note: objects inside d_objects are device allocated, memory leak unless handled inside SceneGPU destructor
+    checkCudaErrors(cudaFree(aux));
+    checkCudaErrors(cudaFree(d_rand_state2));
     checkCudaErrors(cudaFree(d_rand_state));
-    // d_camera allocated device memory, but no deletion kernel, possible leak
+    checkCudaErrors(cudaFree(fb));
 }

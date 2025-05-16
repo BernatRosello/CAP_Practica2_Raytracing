@@ -36,10 +36,8 @@ public:
 
 	__device__ void setList(Object** list, int numobjets) { ol = list; capacity = numobjets; }
 	__device__ void add(Object* o) { ol[size] = o; size++; }
-	__device__ void setObjAt(size_t i, Object* o) { ol[i] = o; }
 	__device__ void setSkyColor(Vec3 sky) { this->sky = sky; }
 	__device__ void setInfColor(Vec3 inf) { this->inf = inf; }
-	__device__ Object** objListPtr() { return ol; }
 
 	__device__ Vec3 getSceneColor(const Ray& r, curandState* local_rand_state) {
 		Ray tempr = r;
