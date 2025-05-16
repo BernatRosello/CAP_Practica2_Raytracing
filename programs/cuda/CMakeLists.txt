@@ -11,6 +11,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "${SRC_DIR}/*.cu"
     "${INCLUDE_DIR}/*.h"
     "${INCLUDE_DIR}/*.hpp"
+    "${INCLUDE_DIR}/*.cuh"
 )
 
 # Define the target (can be changed to add_library if needed)
