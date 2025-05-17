@@ -16,6 +16,7 @@
 #include <limits>
 #include <sstream>
 #include <fstream>
+#include <ios>
 
 #include "Camera.h"
 #include "Object.h"
@@ -275,8 +276,15 @@ int main(int argc, char** argv) {
 
 	if (pid == root) {
 		double avg_t = sum_t / np;
-		std::cout << "Render Time => Min: " << min_t << ", Max: " << max_t << ", Avg: " << avg_t << std::endl;
-
+		char* render_type;
+#ifdef ROW
+		render_type = (char*)malloc(sizeof(char) * 3);
+		render_type = "row";
+#elif COL
+		render_type = (char*)malloc(sizeof(char) * 3);
+		render_type = "col";
+#endif
+		writeCSV("results.csv", np, w, h, ns, render_type, min_t, max_t, avg_t);
 		writeBMP("imgCPU_MPI.bmp", full_data, patch_x_size, patch_y_size * np);
 		printf("Imagen creada.\n");
 	}
