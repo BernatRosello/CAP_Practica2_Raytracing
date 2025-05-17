@@ -38,6 +38,7 @@ public:
 	__device__ void add(Object* o) { ol[size] = o; size++; }
 	__device__ void setSkyColor(Vec3 sky) { this->sky = sky; }
 	__device__ void setInfColor(Vec3 inf) { this->inf = inf; }
+	__device__ void addAt(size_t idx, Object* o) { ol[idx] = o; size++; }
 
 	__device__ Vec3 getSceneColor(const Ray& r, curandState* local_rand_state) {
 		Ray tempr = r;
@@ -80,4 +81,24 @@ private:
 	size_t size;
 	Vec3 sky;
 	Vec3 inf;
+};
+
+enum MaterialType { DIFFUSE = 0, METALLIC = 1, CRYSTALLINE = 2 };
+
+struct MaterialData {
+	MaterialType type;
+	float color[3];		// Used by DIFFUSE and METALLIC
+	float mat_property; // Fuzz for METALLIC, IOR for CRYSTALLINE, unused for DIFFUSE
+
+	MaterialData(MaterialType type, float r, float g, float b, float mat_property) :
+		type(type), color{ r,g,b }, mat_property(mat_property) {}
+};
+
+struct SphereData {
+	float center[3];
+	float radius;
+	MaterialData material;
+
+	SphereData(float sx, float sy, float sz, float sr, MaterialType mat, float r, float g, float b, float mat_property) :
+		center{ sx,sy,sz }, radius(sr), material(mat, r, g, b, mat_property) {}
 };

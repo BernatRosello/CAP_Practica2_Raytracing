@@ -11,6 +11,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 #include "raytracing.h"
 
@@ -25,6 +27,93 @@
 
 #include "random.h"
 #include "utils.h"
+
+Scene loadObjectsFromFile(const std::string& filename) {
+	std::ifstream file(filename);
+	std::string line;
+
+	Scene list;
+
+	if (file.is_open()) {
+		while (std::getline(file, line)) {
+			std::stringstream ss(line);
+			std::string token;
+			std::vector<std::string> tokens;
+
+			while (ss >> token) {
+				tokens.push_back(token);
+			}
+
+			if (tokens.empty()) continue; // Línea vacía
+
+			// Esperamos al menos la palabra clave "Object"
+			if (tokens[0] == "Object" && tokens.size() >= 12) { // Mínimo para Sphere y un material con 1 float
+				// Parsear la esfera
+				if (tokens[1] == "Sphere" && tokens[2] == "(" && tokens[7] == ")") {
+					try {
+						float sx = std::stof(tokens[3].substr(tokens[3].find('(') + 1, tokens[3].find(',') - tokens[3].find('(') - 1));
+						float sy = std::stof(tokens[4].substr(0, tokens[4].find(',')));
+						float sz = std::stof(tokens[5].substr(0, tokens[5].find(',')));
+						float sr = std::stof(tokens[6]);
+
+						// Parsear el material del último objeto creado
+
+						if (tokens[8] == "Crystalline" && tokens[9] == "(" && tokens[11].back() == ')') {
+							float ma = std::stof(tokens[10]);
+							list.add(new Object(
+								new Sphere(Vec3(sx, sy, sz), sr),
+								new Crystalline(ma)
+							));
+							std::cout << "Crystaline" << sx << " " << sy << " " << sz << " " << sr << " " << ma << "\n";
+						}
+						else if (tokens[8] == "Metallic" && tokens.size() == 15 && tokens[9] == "(" && tokens[14] == ")") {
+							float ma = std::stof(tokens[10].substr(tokens[10].find('(') + 1, tokens[10].find(',') - tokens[10].find('(') - 1));
+							float mb = std::stof(tokens[11].substr(0, tokens[11].find(',')));
+							float mc = std::stof(tokens[12].substr(0, tokens[12].find(',')));
+							float mf = std::stof(tokens[13].substr(0, tokens[13].length() - 1));
+							list.add(new Object(
+								new Sphere(Vec3(sx, sy, sz), sr),
+								new Metallic(Vec3(ma, mb, mc), mf)
+							));
+							std::cout << "Metallic" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << " " << mf << "\n";
+						}
+						else if (tokens[8] == "Diffuse" && tokens.size() == 14 && tokens[9] == "(" && tokens[13].back() == ')') {
+							float ma = std::stof(tokens[10].substr(tokens[10].find('(') + 1, tokens[10].find(',') - tokens[10].find('(') - 1));
+							float mb = std::stof(tokens[11].substr(0, tokens[11].find(',')));
+							float mc = std::stof(tokens[12].substr(0, tokens[12].find(',')));
+							list.add(new Object(
+								new Sphere(Vec3(sx, sy, sz), sr),
+								new Diffuse(Vec3(ma, mb, mc))
+							));
+							std::cout << "Diffuse" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << "\n";
+						}
+						else {
+							std::cerr << "Error: Material desconocido o formato incorrecto en la línea: " << line << std::endl;
+						}
+					}
+					catch (const std::invalid_argument& e) {
+						std::cerr << "Error: Conversión inválida en la línea: " << line << " - " << e.what() << std::endl;
+					}
+					catch (const std::out_of_range& e) {
+						std::cerr << "Error: Valor fuera de rango en la línea: " << line << " - " << e.what() << std::endl;
+					}
+				}
+				else {
+					std::cerr << "Error: Formato de esfera incorrecto en la línea: " << line << std::endl;
+				}
+			}
+			else {
+				std::cerr << "Error: Formato de objeto incorrecto en la línea: " << line << std::endl;
+			}
+		}
+		file.close();
+	}
+	else {
+		std::cerr << "Error: No se pudo abrir el archivo: " << filename << std::endl;
+	}
+	return list;
+}
+
 
 Scene randomScene()
 {
@@ -81,9 +170,17 @@ Scene randomScene()
 	return list;
 }
 
-void rayTracingCPU(Vec3 *img, int w, int h, int ns = 10)
+void rayTracingCPU(Vec3 *img, int w, int h, int ns = 10, const std::string &filename = "")
 {
-	Scene world = randomScene();
+	Scene world;
+
+	if (filename.c_str() != "")
+	{
+		world = loadObjectsFromFile("Scene1.txt");
+	}
+	else {
+		world = randomScene();
+	}
 	world.setSkyColor(Vec3(0.5f, 0.7f, 1.0f));
 	world.setInfColor(Vec3(1.0f, 1.0f, 1.0f));
 
@@ -119,7 +216,7 @@ int main()
 {
 	int w = 512; // 1200;
 	int h = 256; // 800;
-	int ns = 10;
+	int ns = 2;
 	clock_t start, stop;
 	double timer_seconds;
 
@@ -132,7 +229,7 @@ int main()
 
 	std::cerr << "--- CPU ---\n";
 	start = clock();
-	rayTracingCPU(img, w, h, ns);
+	rayTracingCPU(img, w, h, ns, "Scene1.txt");
 
 	for (int i = h - 1; i >= 0; i--)
 	{
@@ -153,7 +250,7 @@ int main()
 
 	std::cerr << "--- GPU ---\n";
 	start = clock();
-	rayTracingGPU(img, w, h, ns);
+	rayTracingGPU(img, w, h, ns, "Scene1.txt");
 
 	for (int i = h - 1; i >= 0; i--)
 	{
