@@ -85,79 +85,6 @@ __global__ void render(Vec3 *fb, int w, int h, int ns, Camera **cam, SceneGPU *w
 
 #define RND (curand_uniform(&local_rand_state))
 
-__global__ void init_scene_list_and_cam(Object** aux, SceneGPU* d_world, int numobjects, Camera** d_camera, int nx, int ny) {
-    if (threadIdx.x == 0 && blockIdx.x == 0) {
-        d_world->setList(aux, numobjects);
-        d_world->setSkyColor(Vec3(0.5f, 0.7f, 1.0f));
-        d_world->setInfColor(Vec3(1.0f, 1.0f, 1.0f));
-
-        // CAMERA PLACEMENT
-        Vec3 lookfrom(13.0f, 2.0f, 3.0f);
-        Vec3 lookat(0.0f, 0.0f, 0.0f);
-        float dist_to_focus = 10.0f;
-        float aperture = 0.1f;
-
-        *d_camera = new Camera(lookfrom, lookat, Vec3(0.0f, 1.0f, 0.0f), 20.0f, float(nx) / float(ny), aperture, dist_to_focus);
-    }
-}
-
-__global__ void create_scene_from_data(SceneGPU* d_world, SphereData* sphere_data, int numobjects)
-{
-    //size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
-
-    for (int idx = 0; idx < numobjects; idx++)
-    {
-        Object* o;
-        switch (sphere_data[idx].material.type) {
-        case MaterialType::DIFFUSE:
-            o = new Object(
-                new Sphere(
-                    Vec3(sphere_data[idx].center[0],
-                        sphere_data[idx].center[1],
-                        sphere_data[idx].center[2]),
-                    sphere_data[idx].radius
-                ),
-                new Diffuse(
-                    Vec3(sphere_data[idx].material.color[0],
-                        sphere_data[idx].material.color[1],
-                        sphere_data[idx].material.color[2])
-                )
-            );
-            break;
-        case MaterialType::METALLIC:
-            o = new Object(
-                new Sphere(
-                    Vec3(sphere_data[idx].center[0],
-                        sphere_data[idx].center[1],
-                        sphere_data[idx].center[2]),
-                    sphere_data[idx].radius
-                ),
-                new Metallic(
-                    Vec3(sphere_data[idx].material.color[0],
-                        sphere_data[idx].material.color[1],
-                        sphere_data[idx].material.color[2]),
-                    sphere_data[idx].material.mat_property
-                )
-            );
-            break;
-        case MaterialType::CRYSTALLINE:
-            o = new Object(
-                new Sphere(
-                    Vec3(sphere_data[idx].center[0],
-                        sphere_data[idx].center[1],
-                        sphere_data[idx].center[2]),
-                    sphere_data[idx].radius
-                ),
-                new Crystalline(sphere_data[idx].material.mat_property)
-            );
-            break;
-        }
-        //d_world->addAt(idx, o);
-        d_world->add(o);
-    }
-
-}
-
 __global__ void create_world(Object **aux, int numobjects, SceneGPU *d_world, Camera **d_camera, int nx, int ny, curandState *rand_state)
 {
     if (threadIdx.x == 0 && blockIdx.x == 0)
@@ -218,6 +145,78 @@ __global__ void create_world(Object **aux, int numobjects, SceneGPU *d_world, Ca
         float aperture = 0.1f;
         *d_camera = new Camera(lookfrom, lookat, Vec3(0.0f, 1.0f, 0.0f), 20.0f, float(nx) / float(ny), aperture, dist_to_focus);
     }
+}
+
+__global__ void init_scene_list_and_cam(Object** aux, SceneGPU* d_world, int numobjects, Camera** d_camera, int nx, int ny) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        d_world->setList(aux, numobjects);
+        d_world->setSkyColor(Vec3(0.5f, 0.7f, 1.0f));
+        d_world->setInfColor(Vec3(1.0f, 1.0f, 1.0f));
+
+        // CAMERA PLACEMENT
+        Vec3 lookfrom(13.0f, 2.0f, 3.0f);
+        Vec3 lookat(0.0f, 0.0f, 0.0f);
+        float dist_to_focus = 10.0f;
+        float aperture = 0.1f;
+
+        *d_camera = new Camera(lookfrom, lookat, Vec3(0.0f, 1.0f, 0.0f), 20.0f, float(nx) / float(ny), aperture, dist_to_focus);
+    }
+}
+
+__global__ void create_scene_from_data(SceneGPU* d_world, SphereData* sphere_data, int numobjects)
+{
+    size_t idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    Object* o;
+    switch (sphere_data[idx].material.type) {
+    case MaterialType::DIFFUSE:
+        o = new Object(
+            new Sphere(
+                Vec3(sphere_data[idx].center[0],
+                    sphere_data[idx].center[1],
+                    sphere_data[idx].center[2]),
+                sphere_data[idx].radius
+            ),
+            new Diffuse(
+                Vec3(sphere_data[idx].material.color[0],
+                    sphere_data[idx].material.color[1],
+                    sphere_data[idx].material.color[2])
+            )
+        );
+        break;
+    case MaterialType::METALLIC:
+        o = new Object(
+            new Sphere(
+                Vec3(sphere_data[idx].center[0],
+                    sphere_data[idx].center[1],
+                    sphere_data[idx].center[2]),
+                sphere_data[idx].radius
+            ),
+            new Metallic(
+                Vec3(sphere_data[idx].material.color[0],
+                    sphere_data[idx].material.color[1],
+                    sphere_data[idx].material.color[2]),
+                sphere_data[idx].material.mat_property
+            )
+        );
+        break;
+    case MaterialType::CRYSTALLINE:
+        o = new Object(
+            new Sphere(
+                Vec3(sphere_data[idx].center[0],
+                    sphere_data[idx].center[1],
+                    sphere_data[idx].center[2]),
+                sphere_data[idx].radius
+            ),
+            new Crystalline(sphere_data[idx].material.mat_property)
+        );
+        break;
+    }
+    d_world->addAt(idx, o);
+
+    __syncthreads();
+    if (idx == 0)
+        d_world->setSize(numobjects);
 }
 
 void loadGPUSceneFromFile(const std::string& filename, int w, int h, SceneGPU *&d_world, Camera **&d_camera, Object **&aux, curandState *& d_rand_state) {
@@ -318,10 +317,8 @@ void loadGPUSceneFromFile(const std::string& filename, int w, int h, SceneGPU *&
     std::cout << "Initializing Scene and Camera in hte GPU" << std::endl;
     init_scene_list_and_cam << <1, 1 >> > (aux, d_world, numobjects, d_camera, w, h);
 
-    //int threads = std::min(numobjects, 512);
-    //int blocks = numobjects / threads;
-    int threads = 1;
-    int blocks = 1;
+    int threads = std::min(numobjects, 512);
+    int blocks = numobjects / threads;
     std::cout << "Creating GPU Scene from Scene file:" << filename << "\t using " << blocks << " blocks of " << threads << " threads." << std::endl;
     create_scene_from_data << <blocks, threads >> > (d_world, d_sphere_data, numobjects);
     checkCudaErrors(cudaGetLastError());
