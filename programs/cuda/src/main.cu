@@ -176,7 +176,7 @@ void rayTracingCPU(Vec3 *img, int w, int h, int ns = 10, const std::string &file
 
 	if (filename.c_str() != "")
 	{
-		world = loadObjectsFromFile("Scene1.txt");
+		world = loadObjectsFromFile(filename);
 	}
 	else {
 		world = randomScene();
@@ -229,7 +229,7 @@ int main()
 
 	std::cerr << "--- CPU ---\n";
 	start = clock();
-	rayTracingCPU(img, w, h, ns, "Scene1.txt");
+	rayTracingCPU(img, w, h, ns, "Scene2.txt");
 
 	for (int i = h - 1; i >= 0; i--)
 	{
@@ -250,7 +250,7 @@ int main()
 
 	std::cerr << "--- GPU ---\n";
 	start = clock();
-	rayTracingGPU(img, w, h, ns, "Scene1.txt");
+	rayTracingGPU(img, w, h, ns, "Scene2.txt");
 
 	for (int i = h - 1; i >= 0; i--)
 	{
