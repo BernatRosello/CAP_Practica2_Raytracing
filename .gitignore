@@ -365,3 +365,5 @@ FodyWeavers.xsd
 
 # Ignore rendering results
 *.bmp
+/imgCPU_MPI.bmp
+/imgGPU-prueba.bmp
