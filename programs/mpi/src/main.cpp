@@ -72,7 +72,7 @@ Scene loadObjectsFromFile(const std::string& filename) {
 								new Sphere(Vec3(sx, sy, sz), sr),
 								new Crystalline(ma)
 							));
-							std::cout << "Crystaline" << sx << " " << sy << " " << sz << " " << sr << " " << ma << "\n";
+							//std::cout << "Crystaline" << sx << " " << sy << " " << sz << " " << sr << " " << ma << "\n";
 						}
 						else if (tokens[8] == "Metallic" && tokens.size() == 15 && tokens[9] == "(" && tokens[14] == ")") {
 							float ma = std::stof(tokens[10].substr(tokens[10].find('(') + 1, tokens[10].find(',') - tokens[10].find('(') - 1));
@@ -83,7 +83,7 @@ Scene loadObjectsFromFile(const std::string& filename) {
 								new Sphere(Vec3(sx, sy, sz), sr),
 								new Metallic(Vec3(ma, mb, mc), mf)
 							));
-							std::cout << "Metallic" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << " " << mf << "\n";
+							//std::cout << "Metallic" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << " " << mf << "\n";
 						}
 						else if (tokens[8] == "Diffuse" && tokens.size() == 14 && tokens[9] == "(" && tokens[13].back() == ')') {
 							float ma = std::stof(tokens[10].substr(tokens[10].find('(') + 1, tokens[10].find(',') - tokens[10].find('(') - 1));
@@ -93,7 +93,7 @@ Scene loadObjectsFromFile(const std::string& filename) {
 								new Sphere(Vec3(sx, sy, sz), sr),
 								new Diffuse(Vec3(ma, mb, mc))
 							));
-							std::cout << "Diffuse" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << "\n";
+							//std::cout << "Diffuse" << sx << " " << sy << " " << sz << " " << sr << " " << ma << " " << mb << " " << mc << "\n";
 						}
 						else {
 							std::cerr << "Error: Material desconocido o formato incorrecto en la línea: " << line << std::endl;
@@ -179,14 +179,21 @@ Scene randomScene() {
 	return list;
 }
 
-void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, int py = 0, int pw = -1, int ph = -1) {
+void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, int py = 0, int pw = -1, int ph = -1, const std::string& filename = "") {
 	if (pw == -1) pw = w;
 	if (ph == -1) ph = h;
 	int patch_w = pw - px;
 
-	Scene world = randomScene();
+	Scene world;
 
-	//Scene world = loadObjectsFromFile("Scene1.txt");
+	if (!filename.empty())
+	{
+		world = loadObjectsFromFile(filename);
+	}
+	else {
+		world = randomScene();
+	}
+
 	world.setSkyColor(Vec3(0.5f, 0.7f, 1.0f));
 	world.setInfColor(Vec3(1.0f, 1.0f, 1.0f));
 
@@ -218,11 +225,23 @@ void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, in
 }
 
 int main(int argc, char** argv) {
+	if (argc < 2) {
+		std::cout << "Uso: raytracing_mpi.exe <r|c> [opciones...]\n";
+		return EXIT_FAILURE;
+	}
+
+	int render_type = 0;
+	std::string render_arg = argv[1];
+	if (render_arg == "r") render_type = ROW;
+	else if (render_arg == "c") render_type = COL;
+	else {
+		std::cout << "Render type desconocido. Usa 'r' para rows o 'c' para columns.\n";
+		return EXIT_FAILURE;
+	}
+
 	//srand(time(0));
 	int pid, np;
 	const int root = 0;
-	const bool prl_row = true;
-	const bool prl_col = false;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &pid);
 	MPI_Comm_size(MPI_COMM_WORLD, &np);
@@ -231,21 +250,60 @@ int main(int argc, char** argv) {
 	int h = 256;// 800;
 	int ns = 10;
 
-	int patch_x_size, patch_y_size, patch_x_idx, patch_y_idx;
+	/*
+	if (pid == root) {
+		for (int i = 0; i < argc; i++) {
+			std::cout << "Argv[" << i << "] " << argv[i] << std::endl;
+		}
+	}
+	*/
 
-#ifdef ROW
-	if (pid == root) std::cout << "Render process by rows." << std::endl;
-	patch_x_size = w;
-	patch_x_idx = 0;
-	patch_y_size = h / np;
-	patch_y_idx = pid;
-#elif COL
-	if (pid == root) std::cout << "Render process by columns." << std::endl;
-	patch_x_size = w / np;
-	patch_x_idx = pid;
-	patch_y_size = h;
-	patch_y_idx = 0;
-#endif
+	std::string filename;
+	// Parseo de argumentos opcionales
+	for (int i = 5; i < argc; ++i) {
+		std::string arg = argv[i];
+		if (i == 6) {
+			if (std::stoi(arg) % 8 != 0) {
+				std::cout << "Width must be multiple of 8" << std::endl;
+				return EXIT_FAILURE;
+			}
+			w = std::stoi(arg);
+		}
+		else if (i == 7) {
+			h = std::stoi(arg);
+		}
+		else if (i == 8) {
+			ns = std::stoi(arg);
+		}
+		else if (i == 9) {
+			filename = arg;
+		}
+	}
+
+	int patch_x_size, patch_y_size, patch_x_idx, patch_y_idx;
+	
+	if (render_type == ROW) {
+		if (pid == root) {
+			std::cout << np << " processors" << std::endl;
+			std::cout << "Render process by rows." << std::endl;
+		}
+
+		patch_x_size = w;
+		patch_x_idx = 0;
+		patch_y_size = h / np;
+		patch_y_idx = pid;
+	}
+	else if (render_type == COL) {
+		if (pid == root) {
+			std::cout << np << " processors" << std::endl;
+			std::cout << "Render process by columns." << std::endl;
+		}
+
+		patch_x_size = w / np;
+		patch_x_idx = pid;
+		patch_y_size = h;
+		patch_y_idx = 0;
+	}
 
 	int size = sizeof(unsigned char) * patch_x_size * patch_y_size * 3;
 	unsigned char* data = (unsigned char*)calloc(size, 1);
@@ -258,7 +316,15 @@ int main(int argc, char** argv) {
 	std::chrono::duration<double> elapsed;
 	auto start = std::chrono::high_resolution_clock::now();
 
-	rayTracingCPU(data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
+	if (!filename.empty()) {
+		if (pid == root) {
+			std::cout << "Scene from filename used." << std::endl;
+		}
+		rayTracingCPU(data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end, filename);
+	}
+	else {
+		rayTracingCPU(data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
+	}
 	
 	auto end = std::chrono::high_resolution_clock::now();
 	elapsed = (end - start);
@@ -276,16 +342,41 @@ int main(int argc, char** argv) {
 
 	if (pid == root) {
 		double avg_t = sum_t / np;
-		char* render_type;
-#ifdef ROW
-		render_type = (char*)malloc(sizeof(char) * 3);
-		render_type = "row";
-#elif COL
-		render_type = (char*)malloc(sizeof(char) * 3);
-		render_type = "col";
-#endif
-		writeCSV("results.csv", np, w, h, ns, render_type, min_t, max_t, avg_t);
-		writeBMP("imgCPU_MPI.bmp", full_data, patch_x_size, patch_y_size * np);
+		char* wr_render_type;
+		if (render_type == ROW) {
+			wr_render_type = (char*)malloc(sizeof(char) * 3);
+			wr_render_type = "row";
+		}
+		else if (render_type == COL) {
+			wr_render_type = (char*)malloc(sizeof(char) * 3);
+			wr_render_type = "col";
+		}
+		writeCSV("results_mpi.csv", np, w, h, ns, wr_render_type, min_t, max_t, avg_t);
+
+		unsigned char* image_data;
+
+		if (render_type == ROW) {
+			image_data = full_data;
+		}
+		if (render_type == COL) {
+			image_data = (unsigned char*)calloc(full_size, 1);
+
+			for (int i = 0; i < np; ++i) {
+				int col_offset = i * patch_x_size;
+				for (int y = 0; y < h; ++y) {
+					for (int x = 0; x < patch_x_size; ++x) {
+						int src_idx = (i * patch_x_size * h + y * patch_x_size + x) * 3;
+						int dst_idx = (y * w + col_offset + x) * 3;
+						image_data[dst_idx + 0] = full_data[src_idx + 0];
+						image_data[dst_idx + 1] = full_data[src_idx + 1];
+						image_data[dst_idx + 2] = full_data[src_idx + 2];
+					}
+				}
+			}
+		}
+
+		writeBMP("imgCPU_MPI.bmp", image_data, w, h);
+		
 		printf("Imagen creada.\n");
 	}
 
