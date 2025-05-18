@@ -217,32 +217,27 @@ void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, in
 	}
 }
 
-std::pair<int, int> maxDivGrid(int W, int H, int maxRects) {
-	int bestC = 1, bestR = 1;
-	int bestCount = 0;
-	double targetAR = double(W) / H;
+std::pair<int, int> tileRectangle(int W, int H, int N, double T=0.3) {
+	int bestCols = 1, bestRows = 1, maxTiles = 1;
 
-	for (int r = 1; r <= H; ++r) {
-		if (H % r != 0) continue;
-		for (int c = 1; c <= W; ++c) {
-			if (W % c != 0) continue;
+	for (int cols = 1; cols <= N; ++cols) {
+		int rows = N / cols;
+		if (rows == 0) continue;
 
-			int count = r * c;
-			if (count > maxRects) continue;
+		double ratio = (double)rows / cols;
+		if (fabs(ratio - 1.0) <= T) {
+			int tiles = cols * rows;
+			if (tiles > maxTiles) {
+				maxTiles = tiles;
+				bestCols = cols;
+				bestRows = rows;
 
-			double subdivAR = double(W) / c / (double(H) / r); // subdivided rect aspect ratio
-			double ratio = subdivAR / targetAR;
-			if (ratio < 0.5 || ratio > 2.0) continue;
-
-			if (count > bestCount || (count == bestCount && std::abs(subdivAR - targetAR) < std::abs(double(W) / bestC / (double(H) / bestR) - targetAR))) {
-				bestCount = count;
-				bestC = c;
-				bestR = r;
+				std::cout << "ratio:" << ratio << std::endl;
 			}
 		}
 	}
-
-	return { bestC, bestR };
+	std::cout << "ratio:" << fabs((double)bestRows / bestCols - 1.0) << std::endl;
+	return { bestCols, bestRows };
 }
 
 int main(int argc, char** argv) {
@@ -269,9 +264,9 @@ int main(int argc, char** argv) {
 #if ROW
 	auto patch_dims = std::pair<int, int>(1, max_threads);
 #elif RECT
-	auto patch_dims = maxDivGrid(w, h, max_threads);
+	auto patch_dims = tileRectangle(w, h, max_threads);
 #elif COL
-	auto patch_dims = maxDivGrid(w, h, max_threads);
+	auto patch_dims = std::pair<int, int>(max_threads, 1);
 #endif
 
 	int n_cols = patch_dims.first;
@@ -318,7 +313,7 @@ int main(int argc, char** argv) {
 		std::chrono::duration<double> elapsed;
 		auto start = std::chrono::high_resolution_clock::now();
 
-		if (th_id != 4)
+		if (th_id != n_ths/2)
 		rayTracingCPU(full_data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
 	
 		auto end = std::chrono::high_resolution_clock::now();
