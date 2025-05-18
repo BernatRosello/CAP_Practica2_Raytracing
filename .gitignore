@@ -362,5 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /CMakeSettings.json
-/imgCPUImg1.bmp
+
+# Ignore rendering results
 *.bmp
