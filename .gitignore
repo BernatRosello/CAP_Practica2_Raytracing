@@ -367,3 +367,4 @@ FodyWeavers.xsd
 *.bmp
 /imgCPU_MPI.bmp
 /imgGPU-prueba.bmp
+/results_omp.csv
