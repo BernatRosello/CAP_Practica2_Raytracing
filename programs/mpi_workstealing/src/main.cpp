@@ -311,7 +311,6 @@ int execRenderTask(int frameIdx, int argc=0, const char** argv=nullptr) {
 	int patch_x_size = w / n_cols;
 	int patch_y_size = h / n_rows;
 	omp_set_num_threads(n_cols * n_rows);
-	omp_set_dynamic(max_threads);
 	//std::cout << "Max. Threads = " << max_threads << "\t";
 
 # pragma omp parallel //shared(full_data, max_t, min_t, sum_t)
