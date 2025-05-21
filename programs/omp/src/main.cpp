@@ -179,13 +179,19 @@ Scene randomScene() {
 	return list;
 }
 
-void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, int py = 0, int pw = -1, int ph = -1) {
+void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, int py = 0, int pw = -1, int ph = -1, const std::string& filename = "") {
 	if (pw == -1) pw = w;
 	if (ph == -1) ph = h;
 
-	//Scene world = randomScene();
+	Scene world;
 
-	Scene world = loadObjectsFromFile("Scene1.txt");
+	if (!filename.empty())
+	{
+		world = loadObjectsFromFile(filename);
+	}
+	else {
+		world = randomScene();
+	}
 	world.setSkyColor(Vec3(0.5f, 0.7f, 1.0f));
 	world.setInfColor(Vec3(1.0f, 1.0f, 1.0f));
 
@@ -244,22 +250,50 @@ int main(int argc, char** argv) {
 	//srand(time(0));
 	int n_ths;
 
-	const int w = 4096;// 1200;
-	const int h = 2048;// 800;
+	int w = 4096;// 1200;
+	int h = 2048;// 800;
 	int ns = 10;
+
+	std::string filename;
+	int num_spheres = 0;
+	int max_threads = omp_get_max_threads();
+
+	if (argc > 3) {
+		// Parseo de argumentos opcionales
+		for (int i = 3; i < argc; ++i) {
+			std::string arg = argv[i];
+			if (i == 3) {
+				int n_ths_arg = std::stoi(arg);
+				if (n_ths_arg > 0 && n_ths_arg <= (omp_get_max_threads() * 2))
+					max_threads = n_ths_arg;
+			}
+			else if (i == 4) {
+				num_spheres = std::stoi(arg);
+			}
+			else if (i == 5) {
+				if (std::stoi(arg) % 8 != 0) {
+					std::cout << "Width must be multiple of 8" << std::endl;
+					return EXIT_FAILURE;
+				}
+				w = std::stoi(arg);
+				
+			}
+			else if (i == 6) {
+				h = std::stoi(arg);
+			}
+			else if (i == 7) {
+				ns = std::stoi(arg);
+			}
+			else if (i == 8) {
+				filename = arg;
+			}
+		}
+	}
 
 	unsigned char* full_data = (unsigned char*)calloc(w * h * 3, sizeof(unsigned char));
 	double max_t = -std::numeric_limits<double>::infinity();
 	double min_t = std::numeric_limits<double>::infinity();
 	double sum_t = 0;
-
-	int max_threads = omp_get_max_threads();
-	if (argc > 1)
-	{
-		int n_ths_arg = atoi(argv[1]);
-		if (n_ths_arg > 0 && n_ths_arg <= (omp_get_max_threads()*2))
-			max_threads = n_ths_arg;
-	}
 
 #if ROW
 	auto patch_dims = std::pair<int, int>(1, max_threads);
@@ -276,7 +310,6 @@ int main(int argc, char** argv) {
 	omp_set_num_threads(n_cols * n_rows);
 	std::cout << "Max. Threads = " << max_threads << "\t ";
 	std::cout << "N.COLS(" << patch_x_size << "px): " << patch_dims.first << "\t N.ROWS(" << patch_y_size << "px):" << patch_dims.second << std::endl;
-
 
 	# pragma omp parallel //shared(full_data, max_t, min_t, sum_t)
 	{
@@ -313,12 +346,18 @@ int main(int argc, char** argv) {
 		std::chrono::duration<double> elapsed;
 		auto start = std::chrono::high_resolution_clock::now();
 
-		if (th_id != n_ths/2)
-		rayTracingCPU(full_data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
+		if (th_id != n_ths / 2) {
+			if (!filename.empty()) {
+				std::cout << "Scene from filename used." << std::endl;
+				rayTracingCPU(full_data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end, filename);
+			}
+			else {
+				rayTracingCPU(full_data, w, h, ns, patch_x_start, patch_y_start, patch_x_end, patch_y_end);
+			}
+		}
 	
 		auto end = std::chrono::high_resolution_clock::now();
 		elapsed = (end - start);
-
 
 		# pragma omp atomic
 		sum_t += elapsed.count();
@@ -354,7 +393,7 @@ int main(int argc, char** argv) {
 	render_type = "rect";
 #endif
 
-	writeCSV("results.csv", n_ths, w, h, ns, render_type, min_t, max_t, avg_t);
+	writeCSV("results_omp.csv", n_ths, w, h, num_spheres, ns, render_type, min_t, max_t, avg_t);
 	writeBMP("imgCPU_OMP.bmp", full_data, w, h);
 	printf("Imagen creada.\n");
 
