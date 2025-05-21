@@ -20,7 +20,7 @@ add_executable(${PROGRAM_NAME} ${SOURCES})
 target_include_directories(${PROGRAM_NAME} PRIVATE ${INCLUDE_DIR})
 
 # Optional: Link common libraries if needed
-target_link_libraries(${PROGRAM_NAME} PRIVATE MPI::MPI_CXX) #OpenMP::OpenMP_CXX)
+target_link_libraries(${PROGRAM_NAME} PRIVATE MPI::MPI_CXX OpenMP::OpenMP_CXX)
 
 # Set output directory to your /out folder
 set_target_properties(${PROGRAM_NAME} PROPERTIES
