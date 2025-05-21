@@ -174,7 +174,7 @@ void rayTracingCPU(Vec3 *img, int w, int h, int ns = 10, const std::string &file
 {
 	Scene world;
 
-	if (filename.c_str() != "")
+	if (!filename.empty())
 	{
 		world = loadObjectsFromFile(filename);
 	}
@@ -212,11 +212,41 @@ void rayTracingCPU(Vec3 *img, int w, int h, int ns = 10, const std::string &file
 	}
 }
 
-int main()
+int main(int argc, char** argv)
 {
 	int w = 512; // 1200;
 	int h = 256; // 800;
 	int ns = 2;
+
+	std::string filename;
+	int num_spheres = 0;
+
+	if (argc > 1) {
+		// Parseo de argumentos opcionales
+		for (int i = 2; i < argc; ++i) {
+			std::string arg = argv[i];
+			if (i == 2) {
+				num_spheres = std::stoi(arg);
+			}
+			else if (i == 3) {
+				if (std::stoi(arg) % 8 != 0) {
+					std::cout << "Width must be multiple of 8" << std::endl;
+					return EXIT_FAILURE;
+				}
+				w = std::stoi(arg);
+			}
+			else if (i == 4) {
+				h = std::stoi(arg);
+			}
+			else if (i == 5) {
+				ns = std::stoi(arg);
+			}
+			else if (i == 6) {
+				filename = arg;
+			}
+		}
+	}
+
 	clock_t start, stop;
 	double timer_seconds;
 
@@ -228,8 +258,14 @@ int main()
 	cudaMallocManaged((void **)&img, isize);
 
 	std::cerr << "--- CPU ---\n";
-	start = clock();
-	rayTracingCPU(img, w, h, ns, "Scene2.txt");
+	/*start = clock();
+
+	if (!filename.empty()) {
+		rayTracingCPU(img, w, h, ns, filename);
+	}
+	else {
+		rayTracingCPU(img, w, h, ns);
+	}
 
 	for (int i = h - 1; i >= 0; i--)
 	{
@@ -246,11 +282,11 @@ int main()
 	std::cerr << "CPU took " << timer_seconds << " seconds.\n\n";
 
 	writeBMP("imgCPU-prueba.bmp", data, w, h);
-	printf("Imagen CPU creada.\n");
+	printf("Imagen CPU creada.\n");*/
 
 	std::cerr << "--- GPU ---\n";
 	start = clock();
-	rayTracingGPU(img, w, h, ns, "Scene2.txt");
+	rayTracingGPU(img, w, h, ns, filename);
 
 	for (int i = h - 1; i >= 0; i--)
 	{
@@ -268,10 +304,11 @@ int main()
 
 	writeBMP("imgGPU-prueba.bmp", data, w, h);
 	printf("Imagen GPU creada.\n");
+	writeCSV("results_cuda.csv", w, h, num_spheres, ns, timer_seconds);
 
 	free(data);
 	cudaDeviceReset();
 
-	getchar();
+	//getchar();
 	return (0);
 }

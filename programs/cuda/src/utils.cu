@@ -1,5 +1,8 @@
 #include "utils.h"
 
+#include <fstream>
+#include <iostream>
+
 #include <cmath>
 
 void writeBMP(const char* filename, unsigned char* data, int w, int h) {
@@ -77,4 +80,19 @@ __host__ bool refract(const Vec3& v, const Vec3& n, float ni_over_nt, Vec3& refr
 
 __host__ Vec3 reflect(const Vec3& v, const Vec3& n) {
 	return v - 2 * dot(v, n) * n;
+}
+
+void writeCSV(const char* filename, int w, int h, int num_spheres, int ns, double time) {
+	std::ofstream file(filename, std::ios::app);
+	if (!file) {
+		std::cerr << "Cannot open file." << std::endl;
+	}
+	else {
+		file.seekp(0, std::ios::end);
+		if (file.tellp() == 0) {
+			file << "Width,Height,NumSpheres,NumSamples,Time\n";
+		}
+		file << w << "," << h << "," << num_spheres << "," << ns << "," << time << "\n";
+		file.close();
+	}
 }

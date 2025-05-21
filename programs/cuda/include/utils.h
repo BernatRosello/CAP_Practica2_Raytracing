@@ -3,6 +3,7 @@
 #include "vec3.h"
 
 void writeBMP(const char* filename, unsigned char* data, int w, int h);
+void writeCSV(const char* filename, int w, int h, int num_spheres, int ns, double time);
 
 __host__ float schlick(float cosine, float ref_idx);
 __host__ bool refract(const Vec3& v, const Vec3& n, float ni_over_nt, Vec3& refracted);
