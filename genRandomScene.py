@@ -63,8 +63,6 @@ def generate_scene(num_random_spheres):
         if sphere_str:
             scene_lines.append(sphere_str)
             existing_spheres.append(info)
-        else:
-            print("No se pudo colocar una esfera sin solape tras varios intentos.")
 
     with open("Scene.txt", "w") as f:
         for line in scene_lines:

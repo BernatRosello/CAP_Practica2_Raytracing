@@ -225,10 +225,6 @@ void rayTracingCPU(unsigned char* img, int w, int h, int ns = 10, int px = 0, in
 }
 
 int main(int argc, char** argv) {
-	if (argc < 2) {
-		std::cout << "Uso: raytracing_mpi.exe <r|c> [opciones...]\n";
-		return EXIT_FAILURE;
-	}
 
 	int render_type = 0;
 	std::string render_arg = argv[1];
@@ -257,12 +253,16 @@ int main(int argc, char** argv) {
 		}
 	}
 	*/
-
+	
 	std::string filename;
+	int num_spheres = 0;
 	// Parseo de argumentos opcionales
 	for (int i = 5; i < argc; ++i) {
 		std::string arg = argv[i];
-		if (i == 6) {
+		if (i == 5) {
+			num_spheres = std::stoi(arg);
+		}
+		else if (i == 6) {
 			if (std::stoi(arg) % 8 != 0) {
 				std::cout << "Width must be multiple of 8" << std::endl;
 				return EXIT_FAILURE;
@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
 			wr_render_type = (char*)malloc(sizeof(char) * 3);
 			wr_render_type = "col";
 		}
-		writeCSV("results_mpi.csv", np, w, h, ns, wr_render_type, min_t, max_t, avg_t);
+		writeCSV("results_mpi.csv", np, w, h, num_spheres, ns, wr_render_type, min_t, max_t, avg_t);
 
 		unsigned char* image_data;
 
