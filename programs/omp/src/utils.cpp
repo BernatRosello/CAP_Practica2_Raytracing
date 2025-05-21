@@ -1,0 +1,97 @@
+#include "utils.h"
+
+#include <cmath>
+#include <fstream>
+
+void writeBMP(const char* filename, unsigned char* data, int w, int h) {
+	if (w % 8) {
+		printf("El ancho de la imagen ha de ser multiplo de 8.\n");
+		exit(-1);
+	}
+
+	const int hs = 54;
+	int is = w * h * 3;
+	int fs = hs + is;
+	const int offset = 40;
+
+	char header[hs];
+	header[0] = 'B';
+	header[1] = 'M';
+	int* pi = (int*)(header + 2);
+	*pi = fs;
+	pi++;
+	pi++;
+	*pi = hs;
+	pi++;
+	*pi = offset;
+	pi++;
+	*pi = w;
+	pi++;
+	*pi = h;
+	short* ps = (short*)(pi + 1);
+	*ps = 1;
+	ps++;
+	*ps = 24;
+	pi = (int*)(ps + 1);
+	*pi = 0;
+	pi++;
+	*pi = is;
+	pi++;
+	*pi = 0;
+	pi++;
+	*pi = 0;
+	pi++;
+	*pi = 0;
+	pi++;
+	*pi = 0;
+
+	FILE* f;
+	f = fopen(filename, "wb");
+	if (!f) {
+		printf("No se ha podido crear el archivo.\n");
+		exit(-3);
+	}
+	fwrite(header, 1, 54, f);
+	fwrite(data, 1, w * h * 3, f);
+	fclose(f);
+}
+
+float schlick(float cosine, float ref_idx) {
+	float r0 = (1 - ref_idx) / (1 + ref_idx);
+	r0 = r0 * r0;
+	return r0 + (1 - r0) * pow((1 - cosine), 5);
+}
+
+
+bool refract(const Vec3& v, const Vec3& n, float ni_over_nt, Vec3& refracted) {
+	Vec3 uv = unit_vector(v);
+	float dt = dot(uv, n);
+	float discriminant = 1.0f - ni_over_nt * ni_over_nt * (1 - dt * dt);
+	if (discriminant > 0) {
+		refracted = ni_over_nt * (uv - n * dt) - n * sqrt(discriminant);
+		return true;
+	}
+	else
+		return false;
+}
+
+
+Vec3 reflect(const Vec3& v, const Vec3& n) {
+	return v - 2 * dot(v, n) * n;
+}
+
+void writeCSV(const char* filename, int np, int w, int h, int ns, char* render_type, double min_t, double max_t, double avg_t) {
+	std::cout << "Render Time => Min: " << min_t << ", Max: " << max_t << ", Avg: " << avg_t << std::endl;
+	std::ofstream file(filename, std::ios::app);
+	if (!file) {
+		std::cerr << "Cannot open file." << std::endl;
+	}
+	else {
+		file.seekp(0, std::ios::end);
+		if (file.tellp() == 0) {
+			file << "N_Threads,Width,Height,NumSamples,RenderType,MinTime,MaxTime,AvgTime\n";
+		}
+		file << np << "," << w << "," << h << "," << ns << "," << render_type << "," << min_t << "," << max_t << "," << avg_t << "\n";
+		file.close();
+	}
+}
