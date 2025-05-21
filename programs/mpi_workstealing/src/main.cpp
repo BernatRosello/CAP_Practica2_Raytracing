@@ -409,8 +409,11 @@ int execRenderTask(int frameIdx, int argc=0, char** argv=nullptr) {
 	render_type = (char*)malloc(sizeof(char) * 4);
 	render_type = "rect";
 #endif
-
-	writeCSV("results_omp.csv", n_ths, w, h, num_spheres, ns, render_type, min_t, max_t, avg_t);
+	
+	int np;
+	MPI_Comm_size(MPI_COMM_WORLD, &np);
+	
+	writeCSV("results_omp_workstealing.csv", np-1, n_ths, w, h, num_spheres, ns, render_type, min_t, max_t, avg_t);
 	//int rank;
 	//MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	std::string imgName = "./img/imgCPU_OMP";

@@ -80,7 +80,7 @@ Vec3 reflect(const Vec3& v, const Vec3& n) {
 	return v - 2 * dot(v, n) * n;
 }
 
-void writeCSV(const char* filename, int np, int w, int h, int num_spheres, int ns, char* render_type, double min_t, double max_t, double avg_t) {
+void writeCSV(const char* filename, int np, int th, int w, int h, int num_spheres, int ns, char* render_type, double min_t, double max_t, double avg_t) {
 	std::cout << "Render Time => Min: " << min_t << ", Max: " << max_t << ", Avg: " << avg_t << std::endl;
 	std::ofstream file(filename, std::ios::app);
 	if (!file) {
@@ -89,9 +89,9 @@ void writeCSV(const char* filename, int np, int w, int h, int num_spheres, int n
 	else {
 		file.seekp(0, std::ios::end);
 		if (file.tellp() == 0) {
-			file << "Processes,Width,Height,NumSpheres,NumSamples,RenderType,MinTime,MaxTime,AvgTime\n";
+			file << "Processes,Threads,Width,Height,NumSpheres,NumSamples,RenderType,MinTime,MaxTime,AvgTime\n";
 		}
-		file << np << "," << w << "," << h << "," << num_spheres << "," << ns << "," << render_type << "," << min_t << "," << max_t << "," << avg_t << "\n";
+		file << np << "," << th << "," << w << "," << h << "," << num_spheres << "," << ns << "," << render_type << "," << min_t << "," << max_t << "," << avg_t << "\n";
 		file.close();
 	}
 }
