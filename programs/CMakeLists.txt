@@ -15,6 +15,7 @@ if(NOT (cxx_habilitado EQUAL "-1"))
     add_subdirectory(cpp)
     add_subdirectory(mpi)
     add_subdirectory(omp)
+    add_subdirectory(mpi_workstealing)
 endif()
 
 # Incluir los subdirectorios de CMake que usan C++ y CUDA
