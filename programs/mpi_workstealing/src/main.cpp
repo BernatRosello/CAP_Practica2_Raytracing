@@ -248,7 +248,7 @@ std::pair<int, int> tileRectangle(int W, int H, int N, double T=0.3) {
 	return { bestCols, bestRows };
 }
 
-int execRenderTask(int frameIdx, int argc=0, const char** argv=nullptr) {
+int execRenderTask(int frameIdx, int argc=0, char** argv=nullptr) {
 	//srand(time(0));
 	int n_ths;
 
@@ -269,6 +269,7 @@ int execRenderTask(int frameIdx, int argc=0, const char** argv=nullptr) {
 				int n_ths_arg = std::stoi(arg);
 				if (n_ths_arg > 0 && n_ths_arg <= (omp_get_max_threads() * 2))
 					max_threads = n_ths_arg;
+				//std::cout << "set threads:" << n_ths_arg;
 			}
 			else if (i == 4) {
 				num_spheres = std::stoi(arg);
@@ -432,25 +433,41 @@ int execRenderTask(int frameIdx, int argc=0, const char** argv=nullptr) {
 #define BATCH_SIZE        1//4  // Can tune based on task cost
 
 int main(int argc, char** argv) {
-
 	int provided;
-	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 	if (provided < MPI_THREAD_FUNNELED) {
 		std::cerr << "Insufficient MPI thread support!" << std::endl;
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	const int totalTasks = 100;
+	int totalTasks = 32;
+	if (argc > 1)
+	{
+		totalTasks = atoi(argv[1]);
+	}
+
+	//char* render_args[9] = { "", "", "", argv[2]};
 
 	int rank, world_size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-	//std::cout << world_size << " ";
 
-	if (rank == MASTER)
-	{
+	if (world_size == 1) {
+		// Single process: do everything directly
+		char* n_threads = "16";
+		if (argc > 1) {
+			n_threads = argv[1];
+		}
+		std::cout << "Running in single-process mode. Executing all tasks locally with "
+			<< n_threads << " threads." << std::endl;
+
+		for (int i = 0; i < totalTasks; ++i) {
+			//*render_args[3] = *n_threads;
+			execRenderTask(i, argc - 1, &argv[1]);
+		}
+	}
+	else if (rank == MASTER) {
 		// MASTER NODE
-
 		std::queue<int> workQueue;
 		for (int i = 0; i < totalTasks; ++i)
 			workQueue.push(i);
@@ -483,34 +500,29 @@ int main(int argc, char** argv) {
 				++terminatedWorkers;
 			}
 		}
-	} else {
+	}
+	else {
 		// WORKER NODE
 		while (true) {
 			int dummy = 0;
+			MPI_Send(&dummy, 1, MPI_INT, MASTER, TAG_WORK_REQUEST, MPI_COMM_WORLD);
 
-			// Request work
-			MPI_Send(&dummy, 1, MPI_INT, 0, TAG_WORK_REQUEST, MPI_COMM_WORLD);
-
-			// Receive batch or termination
 			int taskBuffer[BATCH_SIZE];
 			MPI_Status status;
-
-			MPI_Recv(taskBuffer, BATCH_SIZE, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(taskBuffer, BATCH_SIZE, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 			if (status.MPI_TAG == TAG_TERMINATE) {
-				break;  // Exit loop
+				break;
 			}
 
 			int count;
 			MPI_Get_count(&status, MPI_INT, &count);
 
 			for (int i = 0; i < count; ++i) {
-				// render_args: "" "" "" [num_threads] [num_spheres] [width] [height] [num_samples] [filename]
-				const char* render_args[9] = {"", "", "", "16", "10", "512", "512", "1", ""};
-				execRenderTask(taskBuffer[i], 9, render_args);
+				//# OMP: omp_worksteal_multirun.bat [num_veces][num_threads][num_spheres][width][height][num_samples][filename]
+				execRenderTask(taskBuffer[i], argc+1, &argv[-1]);
 			}
 		}
-
 	}
 
 	MPI_Finalize();
